@@ -95,22 +95,6 @@ function GenerateCPlusPlusDeclaration(
     }
   }
 
-  const fields = GetFields(complexType).sort((a, b) => {
-    if (a.AlignmentSize > b.AlignmentSize) {
-      return -1;
-    } else if (a.AlignmentSize < b.AlignmentSize) {
-      return 1;
-    } else {
-      if (a.IsAttribute && !b.IsAttribute) {
-        return -1;
-      } else if (!a.IsAttribute && b.IsAttribute) {
-        return 1;
-      } else {
-        return a.Order - b.Order;
-      }
-    }
-  });
-
   const parser = new DOMParser();
   const document = parser.parseFromString(xsdContent, 'application/xml');
   const complexTypes = document.querySelectorAll('complexType');
@@ -118,6 +102,21 @@ function GenerateCPlusPlusDeclaration(
     const typeName = complexType.getAttribute('name');
     const baseTypeElement = complexType.querySelector('extension');
     const baseTypeName = baseTypeElement ? baseTypeElement.getAttribute('base') : null;
+    const fields = GetFields(complexType).sort((a, b) => {
+      if (a.AlignmentSize > b.AlignmentSize) {
+        return -1;
+      } else if (a.AlignmentSize < b.AlignmentSize) {
+        return 1;
+      } else {
+        if (a.IsAttribute && !b.IsAttribute) {
+          return -1;
+        } else if (!a.IsAttribute && b.IsAttribute) {
+          return 1;
+        } else {
+          return a.Order - b.Order;
+        }
+      }
+    });
     return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
   }).join('\n');
 }
