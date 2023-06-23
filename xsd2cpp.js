@@ -97,7 +97,7 @@ function GenerateCPlusPlusDeclaration(
 
   const parser = new DOMParser();
   const document = parser.parseFromString(xsdContent, 'application/xml');
-  const complexTypes = document.querySelectorAll('complexType');
+  const complexTypes = Array.from(document.querySelectorAll('complexType'));
   return complexTypes.map((complexType) => {
     const typeName = complexType.getAttribute('name');
     const baseTypeElement = complexType.querySelector('extension');
