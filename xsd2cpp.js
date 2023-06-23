@@ -72,6 +72,8 @@ function GenerateCPlusPlusDeclaration(
         return "uint";
       case "SageBool":
         return "bool";
+      case "xs:string":
+        return "LengthString";
       default:
         return xsdType;
     }
@@ -169,6 +171,8 @@ function GenerateCPlusPlusDeclaration(
   }
   // process complex types
   const complexTypes = Array.from(document.querySelectorAll("complexType"));
+  let hasList = false;
+  let hasString = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
       const typeName = complexType.getAttribute("name");
@@ -191,10 +195,18 @@ function GenerateCPlusPlusDeclaration(
           }
         }
       });
+      hasList = hasList || fields.some((f) => f.IsList);
+      hasString = hasString || fields.some((f) => f.Type === "LengthString");
       return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
     })
     .join("\n");
-  return [dumpEnums(), dumpBitFlags(), complexTypeCppDeclarations]
+  return [
+    hasList ? "struct SageBinaryDataList<T> { uint Count; T* Data; };\n" : "",
+    hasString ? "struct LengthString { uint Length; char* Text; };\n" : "",
+    dumpEnums(),
+    dumpBitFlags(),
+    complexTypeCppDeclarations,
+  ]
     .filter((x) => !!x.trim())
     .join("\n");
 }
