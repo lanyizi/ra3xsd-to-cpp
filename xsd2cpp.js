@@ -3,13 +3,6 @@ function GenerateCPlusPlusDeclaration(
   extraFieldMapper = undefined,
   extraAlignmentSizeMapper = undefined
 ) {
-  const parser = new DOMParser();
-  const document = parser.parseFromString(xsdContent, 'application/xml');
-  const complexType = document.querySelector('complexType');
-  const typeName = complexType.getAttribute('name');
-  const baseTypeElement = complexType.querySelector('extension');
-  const baseTypeName = baseTypeElement ? baseTypeElement.getAttribute('base') : null;
-
   function GetFields(complexType) {
     const fields = [];
   
@@ -118,7 +111,15 @@ function GenerateCPlusPlusDeclaration(
     }
   });
 
-  return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
+  const parser = new DOMParser();
+  const document = parser.parseFromString(xsdContent, 'application/xml');
+  const complexTypes = document.querySelectorAll('complexType');
+  return complexTypes.map((complexType) => {
+    const typeName = complexType.getAttribute('name');
+    const baseTypeElement = complexType.querySelector('extension');
+    const baseTypeName = baseTypeElement ? baseTypeElement.getAttribute('base') : null;
+    return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
+  }).join('\n');
 }
 
 
