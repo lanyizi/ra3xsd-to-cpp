@@ -1,0 +1,105 @@
+<html>
+  <head>
+    <title>RA3 XSD TO CPP</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="xsd2cpp.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <h1>RA3 XSD TO CPP</h1>
+      <div>
+        Additional Type Mappings:
+        <label>
+          <input type="checkbox" v-model="typeMappingUseRegex" />
+          Use regex
+        </label>
+
+        <ol>
+          <li v-for="(v, i) in typeMap" v-bind:key="i">
+            <input
+              type="text"
+              v-bind:value="v.from"
+              v-on:input="modifyTypeMap(i, 'from', $event)"
+            />
+            <input
+              type="text"
+              v-bind:value="v.to"
+              v-on:input="modifyTypeMap(i, 'to', $event)"
+            />
+          </li>
+        </ol>
+      </div>
+      <div>
+        <textarea v-model="input" rows="20" cols="80"></textarea>
+      </div>
+      <div>
+        <button @click="convert">Convert</button>
+      </div>
+      <div>
+        <textarea v-model="output" rows="20" cols="80"></textarea>
+      </div>
+    </div>
+    <script>
+      const app = Vue.createApp({
+        data() {
+          return {
+            input: "",
+            output: "",
+            typeMappingUseRegex: false,
+            typeMap: [{ from: "", to: "" }],
+          };
+        },
+        methods: {
+          convert() {
+            let typeMapper = (typeName) => {
+              for (const v of this.typeMap) {
+                if (v.from == typeName) {
+                  return v.to;
+                }
+              }
+            };
+            if (this.typeMappingUseRegex) {
+              const regexMap = this.typeMap.map((v) => {
+                if (!v.from.trim()) {
+                  return null;
+                }
+                try {
+                  return {
+                    from: new RegExp(v.from),
+                    to: v.to,
+                  };
+                } catch (e) {
+                  alert(e);
+                }
+                return null;
+              }).filter((v) => !!v);
+              typeMapper = (typeName) => {
+                for (const v of regexMap) {
+                  if (v.from.test(typeName)) {
+                    return typeName.replace(v.from, v.to);
+                  }
+                }
+              };
+            }
+            this.output = GenerateCPlusPlusDeclaration(
+              this.input,
+              typeMapper
+            );
+          },
+          modifyTypeMap(index, key, event) {
+            this.typeMap[index][key] = event.target.value;
+            if (key == "from" && this.typeMap[index].to == "") {
+              this.typeMap[index].to = "void*";
+            }
+            this.typeMap = this.typeMap
+              .filter((v) => {
+                return v.from !== "" || v.to !== "";
+              })
+              .concat([{ from: "", to: "" }]);
+          },
+        },
+      });
+      app.mount("#app");
+    </script>
+  </body>
+</html>
