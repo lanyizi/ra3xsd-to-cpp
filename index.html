@@ -82,10 +82,14 @@
                 }
               };
             }
-            this.output = GenerateCPlusPlusDeclaration(
-              this.input,
-              typeMapper
-            );
+            try {
+              this.output = GenerateCPlusPlusDeclaration(
+                this.input,
+                typeMapper
+              );
+            } catch (error) {
+              this.output = error;
+            }
           },
           modifyTypeMap(index, key, event) {
             this.typeMap[index][key] = event.target.value;
