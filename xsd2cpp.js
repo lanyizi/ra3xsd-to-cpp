@@ -19,7 +19,10 @@ function GenerateCPlusPlusDeclaration(
       const name = element.getAttribute('name');
       const type = element.getAttribute('type');
       const isOptional = element.getAttribute('minOccurs') === '0';
-      const isList = element.getAttribute('maxOccurs') === 'unbounded' || element.getAttribute('maxOccurs') === '1';
+      const isList = element.getAttribute('maxOccurs') === 'unbounded';
+      if (!isList && element.getAttribute('maxOccurs') !== '1') {
+        throw new Error('Not implemented')
+      }
   
       fields.push(new FieldInfo(name, type, false, isOptional, isList, order));
       order++;
