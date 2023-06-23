@@ -5,32 +5,32 @@ function GenerateCPlusPlusDeclaration(
 ) {
   function GetFields(complexType) {
     const fields = [];
-  
+
     let order = 0;
-    const elementNodes = complexType.querySelectorAll('element');
+    const elementNodes = complexType.querySelectorAll("element");
     elementNodes.forEach((element) => {
-      const name = element.getAttribute('name');
-      const type = element.getAttribute('type');
-      const isOptional = element.getAttribute('minOccurs') === '0';
-      const isList = element.getAttribute('maxOccurs') === 'unbounded';
-      if (!isList && element.getAttribute('maxOccurs') !== '1') {
-        throw new Error('Not implemented')
+      const name = element.getAttribute("name");
+      const type = element.getAttribute("type");
+      const isOptional = element.getAttribute("minOccurs") === "0";
+      const isList = element.getAttribute("maxOccurs") === "unbounded";
+      if (!isList && element.getAttribute("maxOccurs") !== "1") {
+        throw new Error("Not implemented");
       }
-  
+
       fields.push(new FieldInfo(name, type, false, isOptional, isList, order));
       order++;
     });
-  
-    const attributeNodes = complexType.querySelectorAll('attribute');
+
+    const attributeNodes = complexType.querySelectorAll("attribute");
     attributeNodes.forEach((attribute) => {
-      const name = attribute.getAttribute('name');
-      const type = attribute.getAttribute('type');
-      const isOptional = attribute.getAttribute('use') === 'optional';
-  
+      const name = attribute.getAttribute("name");
+      const type = attribute.getAttribute("type");
+      const isOptional = attribute.getAttribute("use") === "optional";
+
       fields.push(new FieldInfo(name, type, true, isOptional, false, order));
       order++;
     });
-  
+
     return fields;
   }
 
@@ -52,7 +52,7 @@ function GenerateCPlusPlusDeclaration(
       this.Order = order;
     }
   }
-  
+
   function MapFieldType(xsdType) {
     if (extraFieldMapper) {
       const mappedType = extraFieldMapper(xsdType);
@@ -61,22 +61,22 @@ function GenerateCPlusPlusDeclaration(
       }
     }
     switch (xsdType) {
-      case 'SageReal':
-      case 'Percentage':
-      case 'Angle':
-      case 'Time':
-        return 'float';
-      case 'SageInt':
-        return 'int';
-      case 'SageUnsignedInt':
-        return 'uint';
-      case 'SageBool':
-        return 'bool';
+      case "SageReal":
+      case "Percentage":
+      case "Angle":
+      case "Time":
+        return "float";
+      case "SageInt":
+        return "int";
+      case "SageUnsignedInt":
+        return "uint";
+      case "SageBool":
+        return "bool";
       default:
         return xsdType;
     }
   }
-  
+
   function CalculateAlignmentSize(type) {
     if (extraAlignmentSizeMapper) {
       const alignmentSize = extraAlignmentSizeMapper(type);
@@ -85,56 +85,132 @@ function GenerateCPlusPlusDeclaration(
       }
     }
     switch (type) {
-      case 'short':
-      case 'ushort':
+      case "short":
+      case "ushort":
         return 2;
-      case 'bool':
+      case "bool":
         return 1;
       default:
         return 4;
     }
   }
 
+  const enums = {};
+  const bitFlags = {};
+
+  function dumpEnums() {
+    return Object.entries(enums)
+      .map(([typeName, enumeration]) => {
+        return [
+          `enum ${typeName} {`,
+          ...enumeration.map((e, i) => `  ${typeName}_${e} = ${i},`),
+          "};\n",
+        ].join("\n");
+      })
+      .join("\n");
+  }
+
+  function dumpBitFlags() {
+    return Object.entries(bitFlags)
+      .map(([typeName, enumeration]) => {
+        if (enumeration.length < 32) {
+          return [
+            `enum ${typeName}BitFlags {`,
+            ...enumeration.map((e, i) => `  ${typeName}F_${e} = ${1 << i}u,`),
+            "};\n",
+          ].join("\n");
+        }
+
+        const result = [
+          `enum ${typeName}Offsets {`,
+          ...enumeration.map(
+            (e, i) => `  ${typeName}V${i >> 5}_${e} = ${i % 32},`
+          ),
+          "};",
+        ];
+        for (let i = 0; i < enumeration.length; i += 32) {
+          result.push(`enum ${typeName}F${i >> 5} {`);
+          for (let j = 0; j < Math.min(32, enumeration.length - i); ++j) {
+            result.push(
+              `  ${typeName}F${i >> 5}_${enumeration[i + j]} = ${
+                (1 << j) >>> 0
+              }u,`
+            );
+          }
+          result.push("};");
+        }
+        result.push(`struct ${typeName} {`);
+        for (let i = 0; i < enumeration.length; i += 32) {
+          result.push(`  ${typeName}F${i >> 5} _${i >> 5};`);
+        }
+        result.push("};\n");
+        return result.join("\n");
+      })
+      .join("\n");
+  }
+
   const parser = new DOMParser();
-  const document = parser.parseFromString(xsdContent, 'application/xml');
-  const complexTypes = Array.from(document.querySelectorAll('complexType'));
-  return complexTypes.map((complexType) => {
-    const typeName = complexType.getAttribute('name');
-    const baseTypeElement = complexType.querySelector('extension');
-    const baseTypeName = baseTypeElement ? baseTypeElement.getAttribute('base') : null;
-    const fields = GetFields(complexType).sort((a, b) => {
-      if (a.AlignmentSize > b.AlignmentSize) {
-        return -1;
-      } else if (a.AlignmentSize < b.AlignmentSize) {
-        return 1;
-      } else {
-        if (a.IsAttribute && !b.IsAttribute) {
+  const document = parser.parseFromString(xsdContent, "application/xml");
+  // process enums
+  const simpleTypes = Array.from(document.querySelectorAll("simpleType"));
+  for (const simpleType of simpleTypes) {
+    const typeName = simpleType.getAttribute("name");
+    const enumeration = Array.from(simpleType.querySelectorAll("enumeration"));
+    if (enumeration.length > 0) {
+      enums[typeName] = enumeration.map((e) => e.getAttribute("value"));
+    }
+    const list = simpleType.querySelector("list");
+    if (list) {
+      const itemType = list.getAttribute("itemType");
+      if (Array.isArray(enums[itemType])) {
+        bitFlags[typeName] = enums[itemType];
+      }
+    }
+  }
+  // process complex types
+  const complexTypes = Array.from(document.querySelectorAll("complexType"));
+  const complexTypeCppDeclarations = complexTypes
+    .map((complexType) => {
+      const typeName = complexType.getAttribute("name");
+      const baseTypeElement = complexType.querySelector("extension");
+      const baseTypeName = baseTypeElement
+        ? baseTypeElement.getAttribute("base")
+        : null;
+      const fields = GetFields(complexType).sort((a, b) => {
+        if (a.AlignmentSize > b.AlignmentSize) {
           return -1;
-        } else if (!a.IsAttribute && b.IsAttribute) {
+        } else if (a.AlignmentSize < b.AlignmentSize) {
           return 1;
         } else {
-          return a.Order - b.Order;
+          if (a.IsAttribute && !b.IsAttribute) {
+            return -1;
+          } else if (!a.IsAttribute && b.IsAttribute) {
+            return 1;
+          } else {
+            return a.Order - b.Order;
+          }
         }
-      }
-    });
-    return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
-  }).join('\n');
+      });
+      return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
+    })
+    .join("\n");
+  return [dumpEnums(), dumpBitFlags(), complexTypeCppDeclarations]
+    .filter((x) => !!x.trim())
+    .join("\n");
 }
-
-
 
 function GenerateCPlusPlusStruct(typeName, baseTypeName, fields) {
   let structDeclaration = `struct ${typeName}`;
   if (baseTypeName) {
     structDeclaration += ` : ${baseTypeName}`;
   }
-  structDeclaration += ' {\n';
+  structDeclaration += " {\n";
 
   fields.forEach((field) => {
     structDeclaration += `  ${field.Type} ${field.Name};\n`;
   });
 
-  structDeclaration += '}';
+  structDeclaration += "};\n";
 
   return structDeclaration;
 }
