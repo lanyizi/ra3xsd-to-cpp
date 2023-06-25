@@ -117,7 +117,7 @@ function GenerateCPlusPlusDeclaration(
       .map(([typeName, enumeration]) => {
         if (enumeration.length < 32) {
           return [
-            `enum ${typeName}BitFlags {`,
+            `enum ${typeName} {`,
             ...enumeration.map((e, i) => `  ${typeName}F_${e} = ${1 << i}u,`),
             "};\n",
           ].join("\n");
