@@ -173,6 +173,7 @@ function GenerateCPlusPlusDeclaration(
   const complexTypes = Array.from(document.querySelectorAll("complexType"));
   let hasList = false;
   let hasString = false;
+  let hasStringHash = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
       const typeName = complexType.getAttribute("name");
@@ -197,12 +198,14 @@ function GenerateCPlusPlusDeclaration(
       });
       hasList = hasList || fields.some((f) => f.IsList);
       hasString = hasString || fields.some((f) => f.Type === "LengthString");
+      hasStringHash = hasStringHash || fields.some((f) => f.Type === "StringHash");
       return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
     })
     .join("\n");
   return [
     hasList ? "struct SageBinaryDataList<T> { uint Count; T* Data; };\n" : "",
     hasString ? "struct LengthString { uint Length; char* Text; };\n" : "",
+    hasStringHash ? "struct StringHash { uint Hash; };\n" : "",
     dumpEnums(),
     dumpBitFlags(),
     complexTypeCppDeclarations,
