@@ -12,12 +12,13 @@ function GenerateCPlusPlusDeclaration(
       const name = element.getAttribute("name");
       const type = element.getAttribute("type");
       const isOptional = element.getAttribute("minOccurs") === "0";
+      const isByValue = element.getAttribute("xas:byValue") === "true";
       const isList = element.getAttribute("maxOccurs") === "unbounded";
       if (!isList && element.getAttribute("maxOccurs") !== "1") {
         throw new Error(`Not implemented: ${type} ${name}`);
       }
 
-      fields.push(new FieldInfo(name, type, false, isOptional, isList, order));
+      fields.push(new FieldInfo(name, type, false, isOptional && !isByValue, isList, order));
       order++;
     });
 
@@ -26,8 +27,9 @@ function GenerateCPlusPlusDeclaration(
       const name = attribute.getAttribute("name");
       const type = attribute.getAttribute("type");
       const isOptional = attribute.getAttribute("use") === "optional";
+      const isByValue = attribute.getAttribute("xas:byValue") === "true";
 
-      fields.push(new FieldInfo(name, type, true, isOptional, false, order));
+      fields.push(new FieldInfo(name, type, true, isOptional && !isByValue, false, order));
       order++;
     });
 
