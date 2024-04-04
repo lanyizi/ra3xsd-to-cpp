@@ -13,6 +13,7 @@ function GenerateCPlusPlusDeclaration(
       const type = element.getAttribute("type");
       const isOptional = element.getAttribute("minOccurs") === "0";
       const isByValue = element.getAttribute("xas:byValue") === "true";
+      const maxOccurs = element.getAttribute("maxOccurs") ?? "1";
       const isList = element.getAttribute("maxOccurs") === "unbounded";
       if (!isList && element.getAttribute("maxOccurs") !== "1") {
         throw new Error(`Not implemented: ${type} ${name}`);
