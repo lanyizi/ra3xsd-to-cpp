@@ -4,6 +4,7 @@ function GenerateCPlusPlusDeclaration(
   extraAlignmentSizeMapper = undefined
 ) {
   function GetFields(complexType) {
+    const complexTypeName = complexType.getAttribute("name");
     const fields = [];
 
     let order = 0;
@@ -14,11 +15,18 @@ function GenerateCPlusPlusDeclaration(
       const isOptional = element.getAttribute("minOccurs") === "0";
       const isByValue = element.getAttribute("xas:byValue") === "true";
       const maxOccurs = element.getAttribute("maxOccurs") ?? "1";
-      const isList = maxOccurs === "unbounded";
+      let isList = maxOccurs === "unbounded";
       if (!isList && maxOccurs !== "1") {
-        throw new Error(`Not implemented: ${type} ${name}`);
+        if (complexTypeName === "GameObject" && name === "UpgradeCameo") {
+          isList = true;
+        }
+        if (complexTypeName === "GameObject" && name === "DisplayUpgrade") {
+          isList = true;
+        }
+        else {
+          throw new Error(`Not implemented: ${complexTypeName} ${type} ${name}`);
+        }
       }
-
       fields.push(new FieldInfo(name, type, false, isOptional && !isByValue, isList, order));
       order++;
     });
