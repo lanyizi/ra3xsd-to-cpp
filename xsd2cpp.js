@@ -73,6 +73,7 @@ function GenerateCPlusPlusDeclaration(
       case "SageUnsignedInt":
         return "uint";
       case "SageBool":
+      case "xs:boolean":
         return "bool";
       case "xs:string":
         return "LengthString";
