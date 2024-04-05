@@ -1,9 +1,9 @@
-function GenerateCPlusPlusDeclaration(
+function generateCPlusPlusDeclaration(
   xsdContent,
   extraFieldMapper = undefined,
   extraAlignmentSizeMapper = undefined
 ) {
-  function GetFields(complexType) {
+  function getFields(complexType) {
     const complexTypeName = complexType.getAttribute("name");
     const fields = [];
 
@@ -47,11 +47,11 @@ function GenerateCPlusPlusDeclaration(
 
   class FieldInfo {
     constructor(name, type, isAttribute, isOptional, isList, order) {
-      type = MapFieldType(type);
+      type = mapFieldType(type);
       if (isList) {
-        type = MapFieldType(`SageBinaryDataList<${type}>`);
+        type = mapFieldType(`SageBinaryDataList<${type}>`);
       } else if (isOptional) {
-        type = MapFieldType(`${type}*`);
+        type = mapFieldType(`${type}*`);
       }
 
       this.Name = name;
@@ -59,12 +59,12 @@ function GenerateCPlusPlusDeclaration(
       this.IsAttribute = isAttribute;
       this.IsOptional = isOptional;
       this.IsList = isList;
-      this.AlignmentSize = CalculateAlignmentSize(this.Type);
+      this.AlignmentSize = calculateAlignmentSize(this.Type);
       this.Order = order;
     }
   }
 
-  function MapFieldType(xsdType) {
+  function mapFieldType(xsdType) {
     if (extraFieldMapper) {
       const mappedType = extraFieldMapper(xsdType);
       if (mappedType) {
@@ -91,7 +91,7 @@ function GenerateCPlusPlusDeclaration(
     }
   }
 
-  function CalculateAlignmentSize(type) {
+  function calculateAlignmentSize(type) {
     if (extraAlignmentSizeMapper) {
       const alignmentSize = extraAlignmentSizeMapper(type);
       if (alignmentSize) {
@@ -194,7 +194,7 @@ function GenerateCPlusPlusDeclaration(
       const baseTypeName = baseTypeElement
         ? baseTypeElement.getAttribute("base")
         : null;
-      const fields = GetFields(complexType).sort((a, b) => {
+      const fields = getFields(complexType).sort((a, b) => {
         if (a.AlignmentSize > b.AlignmentSize) {
           return -1;
         } else if (a.AlignmentSize < b.AlignmentSize) {
@@ -213,7 +213,7 @@ function GenerateCPlusPlusDeclaration(
       hasString = hasString || fields.some((f) => f.Type === "LengthString");
       hasStringHash = hasStringHash || fields.some((f) => f.Type === "StringHash");
       hasStringList = hasStringHash || fields.some((f) => f.Type === "StringList");
-      return GenerateCPlusPlusStruct(typeName, baseTypeName, fields);
+      return generateCPlusPlusStruct(typeName, baseTypeName, fields);
     })
     .join("\n");
   return [
@@ -229,7 +229,7 @@ function GenerateCPlusPlusDeclaration(
     .join("\n");
 }
 
-function GenerateCPlusPlusStruct(typeName, baseTypeName, fields) {
+function generateCPlusPlusStruct(typeName, baseTypeName, fields) {
   let structDeclaration = `struct ${typeName}`;
   if (baseTypeName) {
     structDeclaration += ` : ${baseTypeName}`;
