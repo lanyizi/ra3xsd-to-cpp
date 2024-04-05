@@ -80,26 +80,21 @@ function generateCPlusPlusDeclaration(
       this.AlignmentSize = calculateAlignmentSize(this.Type);
       this.Order = order;
     }
-  }
-
-  static newList(name, type, order) {
-    return new FieldInfo(name, type, false, false, true, order);
-  }
-
-  static newPointerElement(name, type, order) {
-    return new FieldInfo(name, type, false, true, false, order);
-  }
-
-  static newValueElement(name, type, order) {
-    return new FieldInfo(name, type, false, false, false, order);
-  }
-
-  static newPointerAttribute(name, type, order) {
-    return new FieldInfo(name, type, true, true, false, order);
-  }
-
-  static newValueAttribute(name, type, order) {
-    return new FieldInfo(name, type, true, false, false, order);
+    static newList(name, type, order) {
+      return new FieldInfo(name, type, false, false, true, order);
+    }
+    static newPointerElement(name, type, order) {
+      return new FieldInfo(name, type, false, true, false, order);
+    }
+    static newValueElement(name, type, order) {
+      return new FieldInfo(name, type, false, false, false, order);
+    }
+    static newPointerAttribute(name, type, order) {
+      return new FieldInfo(name, type, true, true, false, order);
+    }
+    static newValueAttribute(name, type, order) {
+      return new FieldInfo(name, type, true, false, false, order);
+    }
   }
 
   function mapFieldType(xsdType) {
