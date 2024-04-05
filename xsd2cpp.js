@@ -3,6 +3,20 @@ function generateCPlusPlusDeclaration(
   extraFieldMapper = undefined,
   extraAlignmentSizeMapper = undefined
 ) {
+  function trySpecialHandling(complexTypeName, memberName, typeName, order) {
+    const mapper = {
+      GameObject: {
+        UpgradeCameo: FieldInfo.newList(memberName, typeName, order),
+        DisplayUpgrade: FieldInfo.newList(memberName, typeName, order),
+      }
+    }
+    const mapByType = mapper[complexTypeName];
+    if (!typeMap) {
+      return null;
+    }
+    return mapByType[memberName] ?? null;
+  }
+  
   function getFields(complexType) {
     const complexTypeName = complexType.getAttribute("name");
     const fields = [];
@@ -12,20 +26,18 @@ function generateCPlusPlusDeclaration(
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
       const type = element.getAttribute("type");
+      const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
+      if (speciallyHandled) {
+        fields.push(speciallyHandled);
+        order++;
+        return;
+      }
       const isOptional = element.getAttribute("minOccurs") === "0";
       const isByValue = element.getAttribute("xas:byValue") === "true";
       const maxOccurs = element.getAttribute("maxOccurs") ?? "1";
-      let isList = maxOccurs === "unbounded";
+      const isList = maxOccurs === "unbounded";
       if (!isList && maxOccurs !== "1") {
-        if (complexTypeName === "GameObject" && name === "UpgradeCameo") {
-          isList = true;
-        }
-        if (complexTypeName === "GameObject" && name === "DisplayUpgrade") {
-          isList = true;
-        }
-        else {
-          throw new Error(`Not implemented: ${complexTypeName} ${type} ${name}`);
-        }
+        throw new Error(`Not implemented: ${complexTypeName} ${type} ${name}, maxOccurs = ${maxOccurs}`);
       }
       fields.push(new FieldInfo(name, type, false, isOptional && !isByValue, isList, order));
       order++;
@@ -35,6 +47,12 @@ function generateCPlusPlusDeclaration(
     attributeNodes.forEach((attribute) => {
       const name = attribute.getAttribute("name");
       const type = attribute.getAttribute("type");
+      const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
+      if (speciallyHandled) {
+        fields.push(speciallyHandled);
+        order++;
+        return;
+      }
       const isOptional = attribute.getAttribute("use") === "optional";
       const isByValue = attribute.getAttribute("xas:byValue") === "true";
 
@@ -62,6 +80,26 @@ function generateCPlusPlusDeclaration(
       this.AlignmentSize = calculateAlignmentSize(this.Type);
       this.Order = order;
     }
+  }
+
+  static newList(name, type, order) {
+    return new FieldInfo(name, type, false, false, true, order);
+  }
+
+  static newPointerElement(name, type, order) {
+    return new FieldInfo(name, type, false, true, false, order);
+  }
+
+  static newValueElement(name, type, order) {
+    return new FieldInfo(name, type, false, false, false, order);
+  }
+
+  static newPointerAttribute(name, type, order) {
+    return new FieldInfo(name, type, true, true, false, order);
+  }
+
+  static newValueAttribute(name, type, order) {
+    return new FieldInfo(name, type, true, false, false, order);
   }
 
   function mapFieldType(xsdType) {
