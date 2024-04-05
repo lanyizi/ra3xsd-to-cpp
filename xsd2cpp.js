@@ -11,7 +11,7 @@ function generateCPlusPlusDeclaration(
       }
     }
     const mapByType = mapper[complexTypeName];
-    if (!typeMap) {
+    if (!mapByType) {
       return null;
     }
     return mapByType[memberName] ?? null;
