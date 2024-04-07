@@ -105,6 +105,7 @@ function generateCPlusPlusDeclaration(
       }
     }
     switch (xsdType) {
+      case "xs:float":
       case "SageReal":
       case "Percentage":
       case "Angle":
@@ -118,6 +119,7 @@ function generateCPlusPlusDeclaration(
       case "xs:boolean":
         return "bool";
       case "xs:string":
+      case "AssetId":
         return "LengthString";
       default:
         return xsdType;
