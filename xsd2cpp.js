@@ -40,7 +40,7 @@ function generateCPlusPlusDeclaration(
       if (inlineTypeNameByElement.has(owningElement)) {
         const ownerName = owningElement.getAttribute("name");
         throw new Error(
-          `Not implemented: ${ownerName}, multiple inline complexType definitions`
+          `Element ${ownerName} contains multiple inline complexType definitions, which is not supported`
         );
       }
 
@@ -339,7 +339,7 @@ function generateCPlusPlusDeclaration(
         complexType.getAttribute("name") ??
         inlineTypeNameByComplexType.get(complexType);
       if (!typeName) {
-        throw new Error("Not implemented: anonymous complexType cannot be emitted without a synthesized type name");
+        throw new Error("Internal error: complexType missing synthesized name in mapping");
       }
       const baseTypeElement = complexType.querySelector("extension");
       const baseTypeName = baseTypeElement
