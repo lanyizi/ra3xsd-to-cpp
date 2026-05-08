@@ -17,95 +17,29 @@ function generateCPlusPlusDeclaration(
     return mapByType[memberName] ?? null;
   }
 
-  function collectInlineComplexTypeMappings(document) {
-    const inlineTypeNameByElement = new Map();
-    const inlineTypeNameByComplexType = new Map();
-
-    const anonymousComplexTypes = Array.from(
-      document.querySelectorAll("complexType")
-    ).filter((complexType) => !complexType.getAttribute("name"));
-
-    anonymousComplexTypes.forEach((complexType) => {
-      const owningElement = complexType.parentElement;
-      if (!owningElement || owningElement.localName !== "element") {
-        throw new Error(
-          "Not implemented: anonymous complexType outside direct xs:element declaration"
-        );
-      }
-      if (inlineTypeNameByElement.has(owningElement)) {
-        const ownerName = owningElement.getAttribute("name");
-        throw new Error(
-          `Element ${ownerName} contains multiple inline complexType definitions, which is not supported`
-        );
-      }
-
-      const elementName = owningElement.getAttribute("name");
-      if (!elementName) {
-        throw new Error(
-          "Not implemented: anonymous complexType inside xs:element without name"
-        );
-      }
-
-      const parentComplexType = owningElement.closest("complexType");
-      const owningComplexTypeName = parentComplexType?.getAttribute("name");
-      if (!owningComplexTypeName) {
-        throw new Error(
-          `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
-        );
-      }
-
-      const generatedTypeName = `Inline_${owningComplexTypeName}_${elementName}`;
-      inlineTypeNameByElement.set(owningElement, generatedTypeName);
-      inlineTypeNameByComplexType.set(complexType, generatedTypeName);
-    });
-
-    return {
-      inlineTypeNameByElement,
-      inlineTypeNameByComplexType,
-    };
-  }
-
-  function resolveElementType(complexTypeName, element, inlineTypeNameByElement) {
+  function resolveElementType(complexTypeName, element) {
     const name = element.getAttribute("name");
     const explicitType = element.getAttribute("type");
-    const normalizedInlineTypeName = inlineTypeNameByElement.get(element);
-    if (explicitType && normalizedInlineTypeName) {
+    const inlineComplexType = Array.from(element.children).find(
+      (child) => child.localName === "complexType"
+    );
+    if (explicitType && inlineComplexType) {
       throw new Error(
         `Not implemented: ${complexTypeName} ${name}, element cannot have both explicit type and inline complexType`
       );
     }
-    if (normalizedInlineTypeName) {
-      return normalizedInlineTypeName;
-    }
     if (explicitType) {
       return explicitType;
     }
-    let type = null;
-
-    const inlineComplexTypes = Array.from(element.children).filter(
-      (child) => child.localName === "complexType"
-    );
-    if (inlineComplexTypes.length > 1) {
-      throw new Error(
-        `Not implemented: ${complexTypeName} ${name}, multiple inline complexType definitions`
-      );
+    if (inlineComplexType) {
+      return `Inline_${complexTypeName}_${name}`;
     }
-    if (inlineComplexTypes.length === 1) {
-      const normalizedInlineTypeName = inlineComplexTypes[0].getAttribute("name");
-      if (normalizedInlineTypeName) {
-        return normalizedInlineTypeName;
-      }
-      throw new Error(
-        `Not implemented: ${complexTypeName} ${name}, inline complexType name normalization failed`
-      );
-    }
-
     throw new Error(
       `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
     );
   }
-  
-  function getFields(complexType, complexTypeName, inlineTypeNameByElement) {
+
+  function getFields(complexType, complexTypeName) {
     const fields = [];
 
     const elementNodes = Array.from(complexType.querySelectorAll("element")).filter(
@@ -118,11 +52,7 @@ function generateCPlusPlusDeclaration(
     let order = 0;
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
-      const type = resolveElementType(
-        complexTypeName,
-        element,
-        inlineTypeNameByElement
-      );
+      const type = resolveElementType(complexTypeName, element);
       const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
       if (speciallyHandled) {
         fields.push(speciallyHandled);
@@ -296,8 +226,6 @@ function generateCPlusPlusDeclaration(
 
   const parser = new DOMParser();
   const document = parser.parseFromString(xsdContent, "application/xml");
-  const { inlineTypeNameByElement, inlineTypeNameByComplexType } =
-    collectInlineComplexTypeMappings(document);
   // process enums
   const simpleTypes = Array.from(document.querySelectorAll("simpleType"));
   for (const simpleType of simpleTypes) {
@@ -322,21 +250,28 @@ function generateCPlusPlusDeclaration(
   let hasStringList = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
-      const typeName =
-        complexType.getAttribute("name") ??
-        inlineTypeNameByComplexType.get(complexType);
-      if (!typeName) {
-        throw new Error("Internal error: complexType missing synthesized name in mapping");
-      }
+      const typeName = complexType.getAttribute("name") ?? (() => {
+        const owningElement = complexType.parentElement;
+        if (!owningElement || owningElement.localName !== "element") {
+          throw new Error(
+            "Not implemented: anonymous complexType outside direct xs:element declaration"
+          );
+        }
+        const elementName = owningElement.getAttribute("name");
+        const parentComplexType = owningElement.closest("complexType");
+        const owningComplexTypeName = parentComplexType?.getAttribute("name");
+        if (!owningComplexTypeName) {
+          throw new Error(
+            `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
+          );
+        }
+        return `Inline_${owningComplexTypeName}_${elementName}`;
+      })();
       const baseTypeElement = complexType.querySelector("extension");
       const baseTypeName = baseTypeElement
         ? baseTypeElement.getAttribute("base")
         : null;
-      const fields = getFields(
-        complexType,
-        typeName,
-        inlineTypeNameByElement
-      ).sort((a, b) => {
+      const fields = getFields(complexType, typeName).sort((a, b) => {
         if (a.AlignmentSize > b.AlignmentSize) {
           return -1;
         } else if (a.AlignmentSize < b.AlignmentSize) {
