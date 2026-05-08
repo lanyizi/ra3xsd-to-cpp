@@ -16,6 +16,36 @@ function generateCPlusPlusDeclaration(
     }
     return mapByType[memberName] ?? null;
   }
+
+  function resolveElementType(complexTypeName, element) {
+    const name = element.getAttribute("name");
+    let type = element.getAttribute("type");
+    if (type) {
+      return type;
+    }
+
+    const inlineComplexTypes = Array.from(element.children).filter(
+      (child) => child.localName === "complexType"
+    );
+    if (inlineComplexTypes.length > 1) {
+      throw new Error(
+        `Not implemented: ${complexTypeName} ${name}, multiple inline complexType definitions`
+      );
+    }
+    if (inlineComplexTypes.length === 1) {
+      const normalizedInlineTypeName = inlineComplexTypes[0].getAttribute("name");
+      if (normalizedInlineTypeName) {
+        return normalizedInlineTypeName;
+      }
+      throw new Error(
+        `Not implemented: ${complexTypeName} ${name}, inline complexType name normalization failed`
+      );
+    }
+
+    throw new Error(
+      `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
+    );
+  }
   
   function getFields(complexType) {
     const complexTypeName = complexType.getAttribute("name");
@@ -31,25 +61,7 @@ function generateCPlusPlusDeclaration(
     let order = 0;
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
-      let type = element.getAttribute("type");
-      if (!type) {
-        const inlineComplexTypes = Array.from(element.children).filter(
-          (child) => child.localName === "complexType"
-        );
-        if (inlineComplexTypes.length > 1) {
-          throw new Error(
-            `Not implemented: ${complexTypeName} ${name}, multiple inline complexType definitions`
-          );
-        }
-        if (inlineComplexTypes.length === 1) {
-          type = inlineComplexTypes[0].getAttribute("name");
-        }
-      }
-      if (!type) {
-        throw new Error(
-          `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
-        );
-      }
+      const type = resolveElementType(complexTypeName, element);
       const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
       if (speciallyHandled) {
         fields.push(speciallyHandled);
@@ -246,8 +258,8 @@ function generateCPlusPlusDeclaration(
       );
     }
 
-    const owningNamedComplexType = owningElement.closest("complexType");
-    const owningComplexTypeName = owningNamedComplexType?.getAttribute("name");
+    const parentComplexType = owningElement.closest("complexType");
+    const owningComplexTypeName = parentComplexType?.getAttribute("name");
     if (!owningComplexTypeName) {
       throw new Error(
         `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
