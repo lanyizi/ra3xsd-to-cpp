@@ -21,11 +21,35 @@ function generateCPlusPlusDeclaration(
     const complexTypeName = complexType.getAttribute("name");
     const fields = [];
 
+    const elementNodes = Array.from(complexType.querySelectorAll("element")).filter(
+      (element) => element.closest("complexType") === complexType
+    );
+    const attributeNodes = Array.from(
+      complexType.querySelectorAll("attribute")
+    ).filter((attribute) => attribute.closest("complexType") === complexType);
+
     let order = 0;
-    const elementNodes = complexType.querySelectorAll("element");
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
-      const type = element.getAttribute("type");
+      let type = element.getAttribute("type");
+      if (!type) {
+        const inlineComplexTypes = Array.from(element.children).filter(
+          (child) => child.localName === "complexType"
+        );
+        if (inlineComplexTypes.length > 1) {
+          throw new Error(
+            `Not implemented: ${complexTypeName} ${name}, multiple inline complexType definitions`
+          );
+        }
+        if (inlineComplexTypes.length === 1) {
+          type = inlineComplexTypes[0].getAttribute("name");
+        }
+      }
+      if (!type) {
+        throw new Error(
+          `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
+        );
+      }
       const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
       if (speciallyHandled) {
         fields.push(speciallyHandled);
@@ -43,7 +67,6 @@ function generateCPlusPlusDeclaration(
       order++;
     });
 
-    const attributeNodes = complexType.querySelectorAll("attribute");
     attributeNodes.forEach((attribute) => {
       const name = attribute.getAttribute("name");
       const type = attribute.getAttribute("type");
@@ -200,6 +223,56 @@ function generateCPlusPlusDeclaration(
 
   const parser = new DOMParser();
   const document = parser.parseFromString(xsdContent, "application/xml");
+  const existingTypeNames = new Set(
+    Array.from(document.querySelectorAll("complexType"))
+      .map((complexType) => complexType.getAttribute("name"))
+      .filter((typeName) => !!typeName)
+  );
+  const anonymousComplexTypes = Array.from(
+    document.querySelectorAll("complexType")
+  ).filter((complexType) => !complexType.getAttribute("name"));
+  anonymousComplexTypes.forEach((complexType) => {
+    const owningElement = complexType.parentElement;
+    if (!owningElement || owningElement.localName !== "element") {
+      throw new Error(
+        "Not implemented: anonymous complexType outside direct xs:element declaration"
+      );
+    }
+
+    const elementName = owningElement.getAttribute("name");
+    if (!elementName) {
+      throw new Error(
+        "Not implemented: anonymous complexType inside xs:element without name"
+      );
+    }
+
+    const owningNamedComplexType = owningElement.closest("complexType");
+    const owningComplexTypeName = owningNamedComplexType?.getAttribute("name");
+    if (!owningComplexTypeName) {
+      throw new Error(
+        `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
+      );
+    }
+
+    let generatedTypeName = `${owningComplexTypeName}_${elementName}`;
+    if (existingTypeNames.has(generatedTypeName)) {
+      let disambiguationIndex = 2;
+      while (existingTypeNames.has(`${generatedTypeName}_${disambiguationIndex}`)) {
+        disambiguationIndex++;
+      }
+      generatedTypeName = `${generatedTypeName}_${disambiguationIndex}`;
+    }
+    existingTypeNames.add(generatedTypeName);
+    complexType.setAttribute("name", generatedTypeName);
+
+    const existingElementType = owningElement.getAttribute("type");
+    if (existingElementType && existingElementType !== generatedTypeName) {
+      throw new Error(
+        `Not implemented: element ${elementName} has both explicit type ${existingElementType} and anonymous complexType`
+      );
+    }
+    owningElement.setAttribute("type", generatedTypeName);
+  });
   // process enums
   const simpleTypes = Array.from(document.querySelectorAll("simpleType"));
   for (const simpleType of simpleTypes) {
