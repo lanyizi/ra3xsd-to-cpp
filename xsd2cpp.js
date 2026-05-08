@@ -17,6 +17,29 @@ function generateCPlusPlusDeclaration(
     return mapByType[memberName] ?? null;
   }
 
+  function resolveComplexTypeName(complexType) {
+    const explicitName = complexType.getAttribute("name");
+    if (explicitName) {
+      return explicitName;
+    }
+    // Anonymous complexType: synthesize a name from the owning element and its parent complexType.
+    const owningElement = complexType.parentElement;
+    if (!owningElement || owningElement.localName !== "element") {
+      throw new Error(
+        "Not implemented: anonymous complexType outside direct xs:element declaration"
+      );
+    }
+    const elementName = owningElement.getAttribute("name");
+    const parentComplexType = owningElement.closest("complexType");
+    const owningComplexTypeName = parentComplexType?.getAttribute("name");
+    if (!owningComplexTypeName) {
+      throw new Error(
+        `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
+      );
+    }
+    return `Inline_${owningComplexTypeName}_${elementName}`;
+  }
+
   function resolveElementType(complexTypeName, element) {
     const name = element.getAttribute("name");
     const explicitType = element.getAttribute("type");
@@ -32,7 +55,7 @@ function generateCPlusPlusDeclaration(
       return explicitType;
     }
     if (inlineComplexType) {
-      return `Inline_${complexTypeName}_${name}`;
+      return resolveComplexTypeName(inlineComplexType);
     }
     throw new Error(
       `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
@@ -42,6 +65,9 @@ function generateCPlusPlusDeclaration(
   function getFields(complexType, complexTypeName) {
     const fields = [];
 
+    // querySelectorAll descends into all descendants, including nested inline complexTypes.
+    // The filter keeps only nodes whose nearest complexType ancestor is this complexType,
+    // so elements/attributes belonging to nested inline types are not treated as members of this type.
     const elementNodes = Array.from(complexType.querySelectorAll("element")).filter(
       (element) => element.closest("complexType") === complexType
     );
@@ -250,23 +276,7 @@ function generateCPlusPlusDeclaration(
   let hasStringList = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
-      const typeName = complexType.getAttribute("name") ?? (() => {
-        const owningElement = complexType.parentElement;
-        if (!owningElement || owningElement.localName !== "element") {
-          throw new Error(
-            "Not implemented: anonymous complexType outside direct xs:element declaration"
-          );
-        }
-        const elementName = owningElement.getAttribute("name");
-        const parentComplexType = owningElement.closest("complexType");
-        const owningComplexTypeName = parentComplexType?.getAttribute("name");
-        if (!owningComplexTypeName) {
-          throw new Error(
-            `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
-          );
-        }
-        return `Inline_${owningComplexTypeName}_${elementName}`;
-      })();
+      const typeName = resolveComplexTypeName(complexType);
       const baseTypeElement = complexType.querySelector("extension");
       const baseTypeName = baseTypeElement
         ? baseTypeElement.getAttribute("base")
