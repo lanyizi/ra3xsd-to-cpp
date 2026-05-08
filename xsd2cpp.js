@@ -16,16 +16,69 @@ function generateCPlusPlusDeclaration(
     }
     return mapByType[memberName] ?? null;
   }
-  
-  function getFields(complexType) {
-    const complexTypeName = complexType.getAttribute("name");
+
+  function resolveComplexTypeName(complexType) {
+    const explicitName = complexType.getAttribute("name");
+    if (explicitName) {
+      return explicitName;
+    }
+    // Anonymous complexType: synthesize a name from the owning element and its parent complexType.
+    const owningElement = complexType.parentElement;
+    if (!owningElement || owningElement.localName !== "element") {
+      throw new Error(
+        "Not implemented: anonymous complexType outside direct xs:element declaration"
+      );
+    }
+    const elementName = owningElement.getAttribute("name");
+    const parentComplexType = owningElement.closest("complexType");
+    const owningComplexTypeName = parentComplexType?.getAttribute("name");
+    if (!owningComplexTypeName) {
+      throw new Error(
+        `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
+      );
+    }
+    return `Inline_${owningComplexTypeName}_${elementName}`;
+  }
+
+  function resolveElementType(complexTypeName, element) {
+    const name = element.getAttribute("name");
+    const explicitType = element.getAttribute("type");
+    const inlineComplexType = Array.from(element.children).find(
+      (child) => child.localName === "complexType"
+    );
+    if (explicitType && inlineComplexType) {
+      throw new Error(
+        `Not implemented: ${complexTypeName} ${name}, element cannot have both explicit type and inline complexType`
+      );
+    }
+    if (explicitType) {
+      return explicitType;
+    }
+    if (inlineComplexType) {
+      return resolveComplexTypeName(inlineComplexType);
+    }
+    throw new Error(
+      `Not implemented: ${complexTypeName} ${name}, missing element type declaration`
+    );
+  }
+
+  function getFields(complexType, complexTypeName) {
     const fields = [];
 
+    // querySelectorAll descends into all descendants, including nested inline complexTypes.
+    // The filter keeps only nodes whose nearest complexType ancestor is this complexType,
+    // so elements/attributes belonging to nested inline types are not treated as members of this type.
+    const elementNodes = Array.from(complexType.querySelectorAll("element")).filter(
+      (element) => element.closest("complexType") === complexType
+    );
+    const attributeNodes = Array.from(
+      complexType.querySelectorAll("attribute")
+    ).filter((attribute) => attribute.closest("complexType") === complexType);
+
     let order = 0;
-    const elementNodes = complexType.querySelectorAll("element");
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
-      const type = element.getAttribute("type");
+      const type = resolveElementType(complexTypeName, element);
       const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
       if (speciallyHandled) {
         fields.push(speciallyHandled);
@@ -43,7 +96,6 @@ function generateCPlusPlusDeclaration(
       order++;
     });
 
-    const attributeNodes = complexType.querySelectorAll("attribute");
     attributeNodes.forEach((attribute) => {
       const name = attribute.getAttribute("name");
       const type = attribute.getAttribute("type");
@@ -224,12 +276,12 @@ function generateCPlusPlusDeclaration(
   let hasStringList = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
-      const typeName = complexType.getAttribute("name");
+      const typeName = resolveComplexTypeName(complexType);
       const baseTypeElement = complexType.querySelector("extension");
       const baseTypeName = baseTypeElement
         ? baseTypeElement.getAttribute("base")
         : null;
-      const fields = getFields(complexType).sort((a, b) => {
+      const fields = getFields(complexType, typeName).sort((a, b) => {
         if (a.AlignmentSize > b.AlignmentSize) {
           return -1;
         } else if (a.AlignmentSize < b.AlignmentSize) {
