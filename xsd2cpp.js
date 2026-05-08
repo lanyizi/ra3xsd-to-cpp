@@ -18,11 +18,6 @@ function generateCPlusPlusDeclaration(
   }
 
   function collectInlineComplexTypeMappings(document) {
-    const existingTypeNames = new Set(
-      Array.from(document.querySelectorAll("complexType"))
-        .map((complexType) => complexType.getAttribute("name"))
-        .filter((typeName) => !!typeName)
-    );
     const inlineTypeNameByElement = new Map();
     const inlineTypeNameByComplexType = new Map();
 
@@ -59,15 +54,7 @@ function generateCPlusPlusDeclaration(
         );
       }
 
-      let generatedTypeName = `${owningComplexTypeName}_${elementName}`;
-      if (existingTypeNames.has(generatedTypeName)) {
-        let disambiguationIndex = 2;
-        while (existingTypeNames.has(`${generatedTypeName}_${disambiguationIndex}`)) {
-          disambiguationIndex++;
-        }
-        generatedTypeName = `${generatedTypeName}_${disambiguationIndex}`;
-      }
-      existingTypeNames.add(generatedTypeName);
+      const generatedTypeName = `Inline_${owningComplexTypeName}_${elementName}`;
       inlineTypeNameByElement.set(owningElement, generatedTypeName);
       inlineTypeNameByComplexType.set(complexType, generatedTypeName);
     });
