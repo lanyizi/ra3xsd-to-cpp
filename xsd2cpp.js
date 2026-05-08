@@ -17,12 +17,83 @@ function generateCPlusPlusDeclaration(
     return mapByType[memberName] ?? null;
   }
 
-  function resolveElementType(complexTypeName, element) {
+  function collectInlineComplexTypeMappings(document) {
+    const existingTypeNames = new Set(
+      Array.from(document.querySelectorAll("complexType"))
+        .map((complexType) => complexType.getAttribute("name"))
+        .filter((typeName) => !!typeName)
+    );
+    const inlineTypeNameByElement = new Map();
+    const inlineTypeNameByComplexType = new Map();
+
+    const anonymousComplexTypes = Array.from(
+      document.querySelectorAll("complexType")
+    ).filter((complexType) => !complexType.getAttribute("name"));
+
+    anonymousComplexTypes.forEach((complexType) => {
+      const owningElement = complexType.parentElement;
+      if (!owningElement || owningElement.localName !== "element") {
+        throw new Error(
+          "Not implemented: anonymous complexType outside direct xs:element declaration"
+        );
+      }
+      if (inlineTypeNameByElement.has(owningElement)) {
+        const ownerName = owningElement.getAttribute("name");
+        throw new Error(
+          `Not implemented: ${ownerName}, multiple inline complexType definitions`
+        );
+      }
+
+      const elementName = owningElement.getAttribute("name");
+      if (!elementName) {
+        throw new Error(
+          "Not implemented: anonymous complexType inside xs:element without name"
+        );
+      }
+
+      const parentComplexType = owningElement.closest("complexType");
+      const owningComplexTypeName = parentComplexType?.getAttribute("name");
+      if (!owningComplexTypeName) {
+        throw new Error(
+          `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
+        );
+      }
+
+      let generatedTypeName = `${owningComplexTypeName}_${elementName}`;
+      if (existingTypeNames.has(generatedTypeName)) {
+        let disambiguationIndex = 2;
+        while (existingTypeNames.has(`${generatedTypeName}_${disambiguationIndex}`)) {
+          disambiguationIndex++;
+        }
+        generatedTypeName = `${generatedTypeName}_${disambiguationIndex}`;
+      }
+      existingTypeNames.add(generatedTypeName);
+      inlineTypeNameByElement.set(owningElement, generatedTypeName);
+      inlineTypeNameByComplexType.set(complexType, generatedTypeName);
+    });
+
+    return {
+      inlineTypeNameByElement,
+      inlineTypeNameByComplexType,
+    };
+  }
+
+  function resolveElementType(complexTypeName, element, inlineTypeNameByElement) {
     const name = element.getAttribute("name");
-    let type = element.getAttribute("type");
-    if (type) {
-      return type;
+    const explicitType = element.getAttribute("type");
+    const normalizedInlineTypeName = inlineTypeNameByElement.get(element);
+    if (explicitType && normalizedInlineTypeName) {
+      throw new Error(
+        `Not implemented: ${complexTypeName} ${name}, element cannot have both explicit type and inline complexType`
+      );
     }
+    if (normalizedInlineTypeName) {
+      return normalizedInlineTypeName;
+    }
+    if (explicitType) {
+      return explicitType;
+    }
+    let type = null;
 
     const inlineComplexTypes = Array.from(element.children).filter(
       (child) => child.localName === "complexType"
@@ -47,8 +118,7 @@ function generateCPlusPlusDeclaration(
     );
   }
   
-  function getFields(complexType) {
-    const complexTypeName = complexType.getAttribute("name");
+  function getFields(complexType, complexTypeName, inlineTypeNameByElement) {
     const fields = [];
 
     const elementNodes = Array.from(complexType.querySelectorAll("element")).filter(
@@ -61,7 +131,11 @@ function generateCPlusPlusDeclaration(
     let order = 0;
     elementNodes.forEach((element) => {
       const name = element.getAttribute("name");
-      const type = resolveElementType(complexTypeName, element);
+      const type = resolveElementType(
+        complexTypeName,
+        element,
+        inlineTypeNameByElement
+      );
       const speciallyHandled = trySpecialHandling(complexTypeName, name, type, order);
       if (speciallyHandled) {
         fields.push(speciallyHandled);
@@ -235,56 +309,8 @@ function generateCPlusPlusDeclaration(
 
   const parser = new DOMParser();
   const document = parser.parseFromString(xsdContent, "application/xml");
-  const existingTypeNames = new Set(
-    Array.from(document.querySelectorAll("complexType"))
-      .map((complexType) => complexType.getAttribute("name"))
-      .filter((typeName) => !!typeName)
-  );
-  const anonymousComplexTypes = Array.from(
-    document.querySelectorAll("complexType")
-  ).filter((complexType) => !complexType.getAttribute("name"));
-  anonymousComplexTypes.forEach((complexType) => {
-    const owningElement = complexType.parentElement;
-    if (!owningElement || owningElement.localName !== "element") {
-      throw new Error(
-        "Not implemented: anonymous complexType outside direct xs:element declaration"
-      );
-    }
-
-    const elementName = owningElement.getAttribute("name");
-    if (!elementName) {
-      throw new Error(
-        "Not implemented: anonymous complexType inside xs:element without name"
-      );
-    }
-
-    const parentComplexType = owningElement.closest("complexType");
-    const owningComplexTypeName = parentComplexType?.getAttribute("name");
-    if (!owningComplexTypeName) {
-      throw new Error(
-        `Not implemented: anonymous complexType for element ${elementName} is not nested inside a named complexType`
-      );
-    }
-
-    let generatedTypeName = `${owningComplexTypeName}_${elementName}`;
-    if (existingTypeNames.has(generatedTypeName)) {
-      let disambiguationIndex = 2;
-      while (existingTypeNames.has(`${generatedTypeName}_${disambiguationIndex}`)) {
-        disambiguationIndex++;
-      }
-      generatedTypeName = `${generatedTypeName}_${disambiguationIndex}`;
-    }
-    existingTypeNames.add(generatedTypeName);
-    complexType.setAttribute("name", generatedTypeName);
-
-    const existingElementType = owningElement.getAttribute("type");
-    if (existingElementType && existingElementType !== generatedTypeName) {
-      throw new Error(
-        `Not implemented: element ${elementName} has both explicit type ${existingElementType} and anonymous complexType`
-      );
-    }
-    owningElement.setAttribute("type", generatedTypeName);
-  });
+  const { inlineTypeNameByElement, inlineTypeNameByComplexType } =
+    collectInlineComplexTypeMappings(document);
   // process enums
   const simpleTypes = Array.from(document.querySelectorAll("simpleType"));
   for (const simpleType of simpleTypes) {
@@ -309,12 +335,21 @@ function generateCPlusPlusDeclaration(
   let hasStringList = false;
   const complexTypeCppDeclarations = complexTypes
     .map((complexType) => {
-      const typeName = complexType.getAttribute("name");
+      const typeName =
+        complexType.getAttribute("name") ??
+        inlineTypeNameByComplexType.get(complexType);
+      if (!typeName) {
+        throw new Error("Not implemented: anonymous complexType cannot be emitted without a synthesized type name");
+      }
       const baseTypeElement = complexType.querySelector("extension");
       const baseTypeName = baseTypeElement
         ? baseTypeElement.getAttribute("base")
         : null;
-      const fields = getFields(complexType).sort((a, b) => {
+      const fields = getFields(
+        complexType,
+        typeName,
+        inlineTypeNameByElement
+      ).sort((a, b) => {
         if (a.AlignmentSize > b.AlignmentSize) {
           return -1;
         } else if (a.AlignmentSize < b.AlignmentSize) {
